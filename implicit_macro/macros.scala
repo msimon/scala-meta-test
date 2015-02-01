@@ -12,6 +12,7 @@ object Macros {
     import definitions._
 
     val tpe = weakTypeOf[T]
+    val sym = tpe.typeSymbol
 
     def simpleType = {
       q"""
@@ -29,13 +30,24 @@ object Macros {
       """
     }
 
-    tpe match {
+    val cl  = sym.asClass;
+    if (cl.isPrimitive) {
+      primitive
+    } else {
+      listType
+    }
+
+    sym.asClass match {
       case _ if tpe =:= typeOf[Int] => simpleType
       case _ if tpe =:= typeOf[Double] => simpleType
       case _ if tpe =:= typeOf[Long] => simpleType
       case _ if tpe =:= typeOf[String] => simpleType
       case TypeRef(_,_,t) if tpe.typeConstructor =:= typeOf[List[_]].typeConstructor => listType(t.head)
       case TypeRef(_,_,t) if tpe.typeConstructor =:= typeOf[Array[_]].typeConstructor => listType(t.head)
+      case SingleType(pre, sym) => { println("SingleType :" + tpe + "sym"); q"1" }
+      case ConstantType(v) => { println ("constanttype: " + tpe);  q"1" }
+      // case TypeRef(s,_,t) if t.headOption.isEmpty => { println("TypeRef1 " + tpe); q"1" }
+      case TypeRef(_,_,t) if t.headOption.isDefined => { println("TypeRef2 " + tpe);  q"1" }
       case _ => {
         val l : c.Tree = tpe.decls.sorted.foldLeft(EmptyTree:c.Tree) ({
           case (acc, f)  =>

@@ -3,12 +3,20 @@ import language.experimental.macros
 import scala.reflect.runtime.universe._
 
 object debug {
-  def apply[T](x: =>T): T = macro impl
+  def apply[T](x: => T): Unit = macro printOnlyImpl
   def impl(c: Context)(x: c.Tree) = { import c.universe._
     val q"..$stats" = x
     val loggedStats = stats.flatMap { stat =>
       val msg = "executing " + showCode(stat)
       List(q"println($msg)", stat)
+    }
+    q"..$loggedStats"
+  }
+  def printOnlyImpl(c: Context)(x: c.Tree) = { import c.universe._
+    val q"..$stats" = x
+    val loggedStats = stats.map { stat =>
+      val msg = "executing " + showCode(stat)
+      q"println($msg)"
     }
     q"..$loggedStats"
   }
@@ -115,7 +123,7 @@ def show[T](x: T)(implicit s: Showable[T]) = s.show(x)
 //   def show(x: Int) = x.toString
 // }
 
-object ShowableInt extends Showable[Int] { def show (x:Int) = x.toString }
+class ShowableInt extends Showable[Int] { def show (x:Int) = x.toString }
 
 implicit object Int2Showable extends ShowableInt;
 
@@ -129,3 +137,27 @@ implicit object String2Showable extends Showable[String] {
 
 show(42) // "42"
 show("toto")
+
+
+// c.Prefix
+
+class Coll6[T] {
+  def filter(p: T => Boolean): Coll6[T] = macro M6.filter[T]
+}; object M6 {
+  def filter[T](c: whitebox.Context { type PrefixType = Coll6[T] })
+    (p: c.Expr[T => Boolean]): c.Expr[Coll6[T]] =
+  {
+    println("macroApplication: " + c.macroApplication)
+    println("prefix: " + c.prefix)
+    println("enclosingUnit " + c.enclosingUnit.body)
+    c.prefix
+  }
+}
+
+object Test {
+  def m = {
+    new Coll6[Int]().filter(_ % 2 == 0)
+  }
+}
+
+Test.m

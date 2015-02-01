@@ -1,9 +1,11 @@
-object Macros {
-  def mono = macro Impl.mono
-  def poly[T] = macro Impl.poly[T]
-}
-
 object Test extends App {
+  val u = Macros.poly[String];
+  println("u:" + u)
+
   Macros.mono;
-  Macros.poly[Int];
+  val i = Macros.poly[Int];
+  println("i:" + i)
+
+  val j = Macros.arg(10);
+  println("j:" + j)
 }

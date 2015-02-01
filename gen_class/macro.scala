@@ -7,7 +7,7 @@ object Macros {
 
   def testImpl(c: Context): c.Expr[Any] = {
     import c.universe._
-    val className = newTypeName("Testos")
+    val className = stringToTypeName("Testos")
 
     c.Expr { q"""
     class $className  {
