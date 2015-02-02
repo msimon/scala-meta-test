@@ -30,14 +30,14 @@ object Macros {
       """
     }
 
-    val cl  = sym.asClass;
-    if (cl.isPrimitive) {
-      primitive
-    } else {
-      listType
-    }
+    // val cl  = sym.asClass;
+    // if (cl.isPrimitive) {
+    //   primitive
+    // } else {
+    //   listType
+    // }
 
-    sym.asClass match {
+    tpe match {
       case _ if tpe =:= typeOf[Int] => simpleType
       case _ if tpe =:= typeOf[Double] => simpleType
       case _ if tpe =:= typeOf[Long] => simpleType
