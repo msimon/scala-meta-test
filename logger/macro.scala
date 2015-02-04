@@ -9,7 +9,25 @@ object LoggerMacro {
   def logImpl(c: Context)(x: c.Tree) : c.Tree = {
     import c.universe._
 
-    def pseudoChecker(t: c.Tree, a: String = "", root: Boolean = true) : (String, c.Tree) = {
+    def getConsAndParam(t: c.Tree, lcons: List[Tree] = List(), lparams: List[Tree] = List()) : (List[Tree], List[Tree]) = {
+      t match {
+        case q"""scala.StringContext.apply(..$lcons).s(..$lparams)""" => (lcons.reverse, lparams.reverse) // use of s""
+        case Apply(Select(selectBody, TermName("$plus")), (applyParam::Nil)) => { // use of '+'
+          val (lc,lp) = getConsAndParam(selectBody, lcons, lparams)
+          getConsAndParam(applyParam, lc, lp)
+        }
+
+        case Literal(Constant(_: String)) => (t::lcons, lparams)
+        case Literal(Constant(_)) => {
+          c.error(c.enclosingPosition, "Constant other than String are not accepted in log")
+          (List[Tree](), List[Tree]())
+        }
+        case Apply(Select(_, TermName(_)), _) | Select(_, TermName(_)) => (lcons, t::lparams)
+      }
+    }
+
+
+    def pseudoChecker(lcons: List[Tree], lparams: List[Tree]) : c.Tree = {
       def checkLastChar(str: String, value: Tree) = {
         str.trim.lastOption match {
           case Some(ch) if ch == '=' => ()
@@ -17,73 +35,37 @@ object LoggerMacro {
         }
       }
 
-      def concatTermName(name: String) = {
-        checkLastChar(a, t);
-        (a + name, t)
-      }
-
       def capitalizeKey(keyStr: String) = {
         val l = regexpSplit.findAllIn(keyStr).toList;
 
         l.lastOption match {
-          case Some(v) => l.dropRight(1).mkString(" ") + " " + v.toUpperCase + "'";
+          case Some(v) => l.dropRight(1).mkString(" ") + " " + v.toUpperCase;
           case None => throw new Exception // should never happen (the illegal structure  will be raised)
         }
       }
 
-      t match {
-        case q"""scala.StringContext.apply(..$lcons).s(..$lparams)""" => { // use of s""
-          def concat(lcons : List[Tree], lpar: List[Tree], acc: String = "", newLcons: List[String] = List()) : (String,List[String]) = {
-            (lcons.headOption, lpar.headOption) match {
-              case (Some(Literal(Constant(cons: String))), Some(par)) => {
-                checkLastChar(cons, par);
-                concat(lcons.tail, lpar.tail, acc + cons + par, capitalizeKey(cons)::newLcons)
-              }
-              case (Some(Literal(Constant(cons: String))), None) => (acc + cons, ("'" + cons)::newLcons)
-              case _ => ("", List[String]())
-            }
+      def concat(lcons : List[Tree], lpar: List[Tree], newLcons: List[String] = List()) : List[String] = {
+        (lcons.headOption, lpar.headOption) match {
+          case (Some(Literal(Constant(cons: String))), Some(par)) => {
+            checkLastChar(cons, par);
+            concat(lcons.tail, lpar.tail, capitalizeKey(cons)::newLcons)
           }
-
-          val (s, newLcons) = concat(lcons, lparams)
-          val newTree = q"""scala.StringContext.apply(..${newLcons.reverse}).s(..$lparams)""";
-
-          (s, newTree)
-        }
-
-        case Literal(Constant(b: String)) => {
-          val ret = a + b;
-
-          // if it's the first iteration, we do not capitalize the last word of string (only place where it's not a KEY)
-          if (root == true) {
-            (ret,t)
-          } else {
-            (ret, Literal(Constant(capitalizeKey(b))))
-          }
-        }
-
-        case Literal(Constant(b)) => {
-          c.error(c.enclosingPosition, "Constant other than String are not accepted in log")
-          ("", t)
-        }
-
-        case Apply(Select(selectBody, TermName("$plus")), (applyParam::Nil)) => { // use of '+'
-          val (b,newSelectBody) = pseudoChecker(selectBody, a, false);
-          val (ret,newApplyParam) = pseudoChecker(applyParam, b, root);
-
-          (ret, Apply(Select(newSelectBody, TermName("$plus")), List(newApplyParam)))
-        }
-
-        case Apply(Select(_, TermName(name)), _) => { // function application
-          concatTermName(name)
-        }
-
-        case Select(_, TermName(name)) => { // value
-          concatTermName(name)
+          case (Some(Literal(Constant(cons: String))), None) => cons::newLcons
+          case _ => newLcons
         }
       }
+
+      val newLcons = concat(lcons, lparams)
+      val newTree = q"""scala.StringContext.apply(..${newLcons.reverse}).s(..$lparams)""";
+
+      newTree
     }
 
-    val (_,tree) = pseudoChecker(x);
+    val (lcons,lparam) = getConsAndParam(x) match {
+      case (lcons, lparam) if (lcons.length == lparam.length) => (Literal(Constant(""))::lcons, lparam)
+      case l => l
+    }
+    val tree = pseudoChecker(lcons.reverse, lparam.reverse)
 
     q"""
       println($tree)
