@@ -1,19 +1,34 @@
 object Test extends App {
   object T2 {
-    def f(v: String) = "`v`";
+    def f2 (v : String) = 10
+    def f(v: String) = f2(v);
   }
   val avalue = "AValue"
   val bvalue = "BValue"
   def f(v: String) = "`v`";
 
-  LoggerMacro.log("My first log");
-  LoggerMacro.log("My second log=" + avalue);
+  // // with +
+  // LoggerMacro.log("test")
+  // LoggerMacro.log("This should work=" + avalue + " test=" + bvalue);
+  // LoggerMacro.log("This should work=" + avalue + " test=" + T2.f(avalue) + " ENd");
+  // LoggerMacro.log("This should work with whitespace= " + avalue + " test= " + T2.f(avalue) + " ENd");
 
-  LoggerMacro.log("My second log=" + avalue + " test" + avalue);
+  // LoggerMacro.log("My third log " + 10 + " hello " + 12);
+  // LoggerMacro.log("My third log " + 10 + " hello " + 12 + " dsadasds");
+  // LoggerMacro.log(avalue + "Hello")
+  // LoggerMacro.log("Second term illegal=" + avalue + " test" + T2.f(avalue) + "dasdasd ads");
+  // LoggerMacro.log("Firt term illegal with whitspace   " + avalue + " test=" + T2.f(avalue) + "dasdasd ads");
 
-  // LoggerMacro.log("My second log" + avalue + " test" + f(avalue));
 
-  // LoggerMacro.log(avalue + "My second log test=" + T2.f(avalue));
 
-  LoggerMacro.log(s"My second log=$avalue, $bvalue");
+  // with s
+  LoggerMacro.log(s"test")
+  LoggerMacro.log(s"""This should work=$avalue test=$bvalue""");
+  LoggerMacro.log(s"""This should work=$avalue test=${T2.f(avalue)} ENd""");
+  LoggerMacro.log(s"""This should work with whitespace= $avalue test= ${T2.f(avalue)} ENd""");
+
+  // LoggerMacro.log(s"""$avalue Hello""")
+  // LoggerMacro.log(s"""Second term illegal=$avalue test ${T2.f(avalue)} dasdasd ads""");
+  // LoggerMacro.log(s"""Firt term illegal with whitspace    $avalue test=${T2.f(avalue)} dasdasd ads""");
+  // LoggerMacro.log(s"""First term illegal with whitspace $avalue test=${T2.f(avalue)}""")
 }
