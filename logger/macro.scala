@@ -1,5 +1,5 @@
 import language.experimental.macros
-import reflect.macros.whitebox._
+import reflect.macros.blackbox._
 
 object LoggerMacro {
   val regexpSplit = "[^\\s]+".r
@@ -19,7 +19,7 @@ object LoggerMacro {
 
         case Literal(Constant(_: String)) => (t::lcons, lparams)
         case Literal(Constant(_)) => {
-          c.error(c.enclosingPosition, "Constant other than String are not accepted in log")
+          c.error(t.pos, "Constant other than String are not accepted in log")
           (List[Tree](), List[Tree]())
         }
         case Apply(Select(_, TermName(_)), _) | Select(_, TermName(_)) => (lcons, t::lparams)
@@ -31,7 +31,7 @@ object LoggerMacro {
       def checkLastChar(str: String, value: Tree) = {
         str.trim.lastOption match {
           case Some(ch) if ch == '=' => ()
-          case _ => c.error(c.enclosingPosition, s"""Term `$value` is not associated to a key. Check bit.ly/18MsDt9 for documentation""")
+          case _ => c.error(value.pos, s"""Term `$value` is not associated to a key. Check bit.ly/18MsDt9 for documentation""")
         }
       }
 
@@ -55,8 +55,34 @@ object LoggerMacro {
         }
       }
 
+      def addQuote(lcons: List[String], lparams: List[Tree], acc: List[String] = List[String](), prev: Boolean = false) : List[String] = {
+        (lcons, lparams) match {
+          case ((c::lcons),(p::lparams)) =>
+            val (nc,next) = {
+              if (p.tpe =:= typeOf[String]) { (c + "'", true) }
+              else { (c, false) }
+            }
+
+            val nnc = {
+              if (prev) { "'" + nc }
+              else { nc }
+            }
+
+            addQuote(lcons, lparams, (nnc::acc), next)
+          case ((c::_),_) =>
+            val nc = {
+              if (prev) { "'" + c }
+              else { c }
+            }
+            (nc::acc).reverse
+          case _ => acc.reverse
+        }
+      }
+
       val newLcons = concat(lcons, lparams)
-      val newTree = q"""scala.StringContext.apply(..${newLcons.reverse}).s(..$lparams)""";
+      val mlcons = addQuote(newLcons.reverse, lparams);
+
+      val newTree = q"""scala.StringContext.apply(..${mlcons}).s(..$lparams)""";
 
       newTree
     }
