@@ -1,15 +1,45 @@
 import language.experimental.macros
 import reflect.macros.blackbox._
 
-object LoggerMacro {
-  val regexpSplit = "[^\\s]+".r
+trait Logging {
+  protected lazy val logger: Logger = new Logger
+}
 
-  def log(x : String) : Unit = macro logImpl
+object Logger {
+  val regexpSplit = """[^\s]+""".r
 
-  def logImpl(c: Context)(x: c.Tree) : c.Tree = {
-    import c.universe._
+  trait Level
+  case object Low extends Level
+  case object Medium extends Level
+  case object High extends Level
+}
 
+final class Logger {
+  def debug(x: String) : Unit = macro LoggerMacro.logDefaultLevelImpl
+  def info(x: String) : Unit = macro LoggerMacro.logDefaultLevelImpl
+
+  def debug(x: String, lvl : Logger.Level) : Unit = macro LoggerMacro.logImpl
+  def info(x: String, lvl : Logger.Level) : Unit = macro LoggerMacro.logImpl
+  def warn(x : String, lvl: Logger.Level) : Unit = macro LoggerMacro.logImpl
+  def error(x : String, lvl: Logger.Level) : Unit = macro LoggerMacro.logImpl
+}
+
+class LoggerMacro(val c: Context) {
+  import c.universe._
+
+  def logDefaultLevelImpl(x: c.Tree) : c.Tree = {
+    // if we extract prefix as $prefix(..$param) we will fetch the type of prefix
+    // forbiding the call to overloading function
+    val q"$prefix.$fname(..$params)" = c.macroApplication
+    val p = params :+ q"Logger.Low";
+
+    q"$prefix.$fname(..$p)"
+  }
+
+  def logImpl(x: c.Tree, lvl: c.Tree) : c.Tree = {
+    //    println("\n\n")
     def getConsAndParam(t: c.Tree, lcons: List[Tree] = List(), lparams: List[Tree] = List()) : (List[Tree], List[Tree]) = {
+     // println(showRaw(t));
       t match {
         case q"""scala.StringContext.apply(..$lcons).s(..$lparams)""" => (lcons.reverse, lparams.reverse) // use of s""
         case Apply(Select(selectBody, TermName("$plus")), (applyParam::Nil)) => { // use of '+'
@@ -35,11 +65,18 @@ object LoggerMacro {
         }
       }
 
-      def capitalizeKey(keyStr: String) = {
-        val l = regexpSplit.findAllIn(keyStr).toList;
+      def capitalizeKey(keyStr: String) : String = {
+        val l = Logger.regexpSplit.findAllIn(keyStr).toList;
 
         l.lastOption match {
-          case Some(v) => l.dropRight(1).mkString(" ") + " " + v.toUpperCase;
+          case Some(v) => {
+            // we must remove all \n \t ... from the key before we capitalize
+            val vClean = v.replaceAll("""(\\.)""", "$1 ")
+            if (vClean != v)
+              l.dropRight(1).mkString(" ") + capitalizeKey(vClean)
+            else
+              l.dropRight(1).mkString(" ") + " " + v.replaceAll("""\\.""", "").toUpperCase
+          }
           case None => throw new Exception // should never happen (the illegal structure  will be raised)
         }
       }
@@ -59,7 +96,7 @@ object LoggerMacro {
         (lcons, lparams) match {
           case ((c::lcons),(p::lparams)) =>
             val (nc,next) = {
-              if (p.tpe =:= typeOf[String]) { (c + "'", true) }
+              if (p.tpe != null && p.tpe =:= typeOf[String]) { (c + "'", true) }
               else { (c, false) }
             }
 
@@ -74,6 +111,7 @@ object LoggerMacro {
               if (prev) { "'" + c }
               else { c }
             }
+
             (nc::acc).reverse
           case _ => acc.reverse
         }
@@ -81,7 +119,6 @@ object LoggerMacro {
 
       val newLcons = concat(lcons, lparams)
       val mlcons = addQuote(newLcons.reverse, lparams);
-
       val newTree = q"""scala.StringContext.apply(..${mlcons}).s(..$lparams)""";
 
       newTree
@@ -91,10 +128,17 @@ object LoggerMacro {
       case (lcons, lparam) if (lcons.length == lparam.length) => (Literal(Constant(""))::lcons, lparam)
       case l => l
     }
+
+    val q"$prefix.$fname(..$params)" = c.macroApplication;
+    val Select(Ident(_), TermName(lvlStr: String)) = lvl;
     val tree = pseudoChecker(lcons.reverse, lparam.reverse)
 
+    // println(showRaw(tree));
+    // println(showCode(tree));
+
+
     q"""
-      println($tree)
+      println("LVL=" + $lvlStr + " " + $tree)
     """
   }
 }
